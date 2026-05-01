@@ -1,0 +1,61 @@
+dataset_source: "tapaco"
+source_params:
+  tapaco:
+    language: "ru"
+    pair_mode: "all_pairs"
+    #file_path: "data/tapaco_ru.csv"   # если есть готовый файл
+  backtranslation:
+    input_file: "data/sentences.txt"
+    from_lang: "ru"
+    to_lang: "en"
+    api: "googletrans"                # или "deep_translator"
+  custom_merge:
+    files: ["data/ds1.csv", "data/ds2.csv"]
+
+preprocessing:
+  steps:
+    - remove_duplicates
+    - normalize_text
+    - filter_by_length
+    - filter_edit_distance
+    #- filter_semantic_similarity
+  remove_duplicates: {}
+  normalize_text:
+    lower: true
+    trim: true
+    remove_brackets: true
+  filter_by_length:
+    max_tokens: 128
+    tokenizer: "cointegrated/rut5-base"  # для подсчёта токенов
+  filter_edit_distance:
+    min_edit_ratio: 0.1
+    max_edit_ratio: 0.9
+  filter_semantic_similarity:
+    threshold: 0.75
+    model: "sentence-transformers/LaBSE"
+    batch_size: 32
+
+model_name: "rut5_paraphraser"
+model_config:
+  pretrained_name: "cointegrated/rut5-base"
+  max_length: 128
+  batch_size: 16
+  learning_rate: 3e-4
+  num_epochs: 5
+  warmup_steps: 200
+  weight_decay: 0.01
+  gradient_accumulation_steps: 1
+
+trainer_config:
+  output_dir: "models/rut5_paraphraser/saves"
+  logging_steps: 50
+  eval_steps: 500
+  save_steps: 500
+  save_total_limit: 2
+  fp16: false
+
+metrics_config:
+  metrics: ["bleu", "bertscore", "cosine_similarity"]
+  bertscore_model: "cointegrated/rubert-tiny2"
+  embedding_model: "sentence-transformers/LaBSE"
+  batch_size: 16
