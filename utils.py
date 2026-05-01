@@ -17,7 +17,7 @@ def load_config(path="config.yaml"):
     with open(path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
-def build_dataloaders(df: pd.DataFrame, model_config: dict, split_ratios=(0.8, 0.1, 0.1), seed=42):
+def build_dataloaders(df: pd.DataFrame, model_config: dict, split_ratios=(0.85, 0.13, 0.02), seed=42):
     df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
     n = len(df)
     train_end = int(n * split_ratios[0])

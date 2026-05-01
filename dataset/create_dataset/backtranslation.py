@@ -1,5 +1,5 @@
 import pandas as pd
-from deep_translator import GoogleTranslator  # pip install deep-translator
+from deep_translator import GoogleTranslator
 from tqdm import tqdm
 
 def load_or_create(config_section: dict) -> pd.DataFrame:

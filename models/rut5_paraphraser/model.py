@@ -36,7 +36,6 @@ class ParaphraserModel:
         train_dataset = train_dataset.map(tokenize_fn, batched=True)
         val_dataset = val_dataset.map(tokenize_fn, batched=True)
 
-        # Гарантируем, что learning_rate – число (float)
         lr = float(self.config.get("learning_rate", 3e-4))
         args = Seq2SeqTrainingArguments(
             output_dir=trainer_config.get("output_dir", "./saves"),
@@ -110,7 +109,7 @@ class ParaphraserModel:
         outputs = self.model.generate(
             **inputs,
             max_length=self.max_length,
-            num_beams=4,
+            num_beams=1,
             num_return_sequences=num_return_sequences,
             early_stopping=True
         )

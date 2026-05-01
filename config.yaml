@@ -26,7 +26,7 @@ preprocessing:
     remove_brackets: true
   filter_by_length:
     max_tokens: 128
-    tokenizer: "cointegrated/rut5-base"  # для подсчёта токенов
+    tokenizer: "cointegrated/rut5-base"
   filter_edit_distance:
     min_edit_ratio: 0.1
     max_edit_ratio: 0.9

@@ -41,7 +41,7 @@ def filter_semantic_similarity(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     def compute_sim_batched(texts1, texts2):
         emb1 = model.encode(texts1, batch_size=batch_size, show_progress_bar=False)
         emb2 = model.encode(texts2, batch_size=batch_size, show_progress_bar=False)
-        # cosine similarity
+
         sim = np.sum(emb1 * emb2, axis=1) / (np.linalg.norm(emb1, axis=1) * np.linalg.norm(emb2, axis=1))
         return sim
 

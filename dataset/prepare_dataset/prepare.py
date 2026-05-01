@@ -18,7 +18,7 @@ STEP_MAP = {
 
 def prepare_dataset(df: pd.DataFrame, preproc_config: dict) -> pd.DataFrame:
     steps = preproc_config.get("steps", [])
-    # Общий прогресс-бар по шагам
+
     with tqdm(total=len(steps), desc="Preprocessing", unit="step") as pbar:
         for step_name in steps:
             if step_name in STEP_MAP:
