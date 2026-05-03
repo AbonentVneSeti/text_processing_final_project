@@ -46,10 +46,9 @@ class ParaphraserModel:
             warmup_steps=int(self.config.get("warmup_steps", 0)),
             weight_decay=float(self.config.get("weight_decay", 0.01)),
             gradient_accumulation_steps=int(self.config.get("gradient_accumulation_steps", 1)),
-            eval_strategy="steps",
-            logging_steps=int(trainer_config.get("logging_steps", 50)),
-            eval_steps=int(trainer_config.get("eval_steps", 500)),
-            save_steps=int(trainer_config.get("save_steps", 500)),
+            logging_strategy=trainer_config.get("logging_strategy", "epoch"),
+            eval_strategy=trainer_config.get("eval_strategy", "epoch"),
+            save_strategy=trainer_config.get("save_strategy", "epoch"),
             save_total_limit=int(trainer_config.get("save_total_limit", 2)),
             predict_with_generate=True,
             fp16=bool(trainer_config.get("fp16", False)),
@@ -109,7 +108,11 @@ class ParaphraserModel:
         outputs = self.model.generate(
             **inputs,
             max_length=self.max_length,
-            num_beams=1,
+            min_length=6,
+            do_sample=True,
+            temperature=0.85,
+            top_p=0.9,
+            repetition_penalty=1.2,
             num_return_sequences=num_return_sequences,
             early_stopping=True
         )

@@ -48,3 +48,17 @@ def filter_semantic_similarity(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     sims = compute_sim_batched(df['original'].tolist(), df['paraphrase'].tolist())
     mask = sims >= threshold
     return df[mask].reset_index(drop=True)
+
+def filter_trivial_pairs(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    min_edit_ratio = params.get("min_edit_ratio", 0.2)
+    min_len = params.get("min_len", 6)
+    max_len = params.get("max_len", 50)
+
+    mask = df.apply(lambda row: (
+        Levenshtein.distance(row['original'], row['paraphrase']) / max(len(row['original']), len(row['paraphrase']), 1)
+    ) >= min_edit_ratio, axis=1)
+    df = df[mask]
+
+    df = df[df['original'].str.split().str.len().between(min_len, max_len)]
+    df = df[df['paraphrase'].str.split().str.len().between(min_len, max_len)]
+    return df.reset_index(drop=True)

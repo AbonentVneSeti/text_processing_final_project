@@ -5,12 +5,14 @@ from .filters import (
     remove_duplicates,
     filter_by_length,
     filter_edit_distance,
-    filter_semantic_similarity
+    filter_semantic_similarity,
+    filter_trivial_pairs
 )
 
 STEP_MAP = {
     "remove_duplicates": remove_duplicates,
     "normalize_text": normalize_text,
+    "filter_trivial_pairs": filter_trivial_pairs,
     "filter_by_length": filter_by_length,
     "filter_edit_distance": filter_edit_distance,
     "filter_semantic_similarity": filter_semantic_similarity,
