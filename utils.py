@@ -17,15 +17,13 @@ def load_config(path="config.yaml"):
     with open(path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
-def build_dataloaders(df: pd.DataFrame, model_config: dict, split_ratios=(0.85, 0.13, 0.02), seed=42):
+def build_dataloaders(df: pd.DataFrame, model_config: dict, split_ratios=(0.9, 0.1), seed=42):
     df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
     n = len(df)
     train_end = int(n * split_ratios[0])
-    val_end = int(n * (split_ratios[0] + split_ratios[1]))
 
     train_df = df.iloc[:train_end]
-    val_df = df.iloc[train_end:val_end]
-    test_df = df.iloc[val_end:]
+    val_df = df.iloc[train_end:]
 
     batch_size = model_config.get("batch_size", 8)
 
@@ -40,5 +38,4 @@ def build_dataloaders(df: pd.DataFrame, model_config: dict, split_ratios=(0.85, 
 
     train_loader = Wrapper(train_df, batch_size)
     val_loader = Wrapper(val_df, batch_size)
-    test_loader = Wrapper(test_df, batch_size)
-    return train_loader, val_loader, test_loader
+    return train_loader, val_loader
