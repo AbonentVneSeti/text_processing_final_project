@@ -60,7 +60,7 @@ trainer_config:
   load_best_model_at_end: true
   metric_for_best_model: "eval_loss"
   greater_is_better: false
-  fp16: true
+  fp16: false
 
 metrics_config:
   metrics: ["bleu", "bertscore", "cosine_similarity"]

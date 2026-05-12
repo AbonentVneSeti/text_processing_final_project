@@ -6,7 +6,7 @@ from .metrics import compute_metrics
 
 def train_model(model, train_loader, val_loader, config, trainer_config, metrics_config):
     history = model.train(train_loader, val_loader, trainer_config)
-    
+ 
     log_hist = [h for h in history if 'loss' in h and 'eval_loss' in h]
     if log_hist:
         steps = [h.get('step', i) for i, h in enumerate(log_hist)]
