@@ -3,14 +3,16 @@ source_params:
   tapaco:
     language: "ru"
     pair_mode: "all_pairs"
-    #file_path: "data/tapaco_ru.csv"   # если есть готовый файл
   backtranslation:
-    input_file: "data/sentences.txt"
     from_lang: "ru"
     to_lang: "en"
-    api: "googletrans"                # или "deep_translator"
-  custom_merge:
-    files: ["data/ds1.csv", "data/ds2.csv"]
+    batch_size: 100
+    max_workers: 2
+    max_requests_per_second: 0.5
+    checkpoint_every: 100
+    output_file: "data/backtranslated.parquet"
+  #custom_merge:
+  #  files: ["data/ds1.csv", "data/ds2.csv"]
 
 preprocessing:
   steps:
@@ -18,7 +20,8 @@ preprocessing:
     - normalize_text
     - filter_trivial_pairs
     - filter_by_length
-    - filter_edit_distance
+    - filter_near_duplicates
+    - filter_grammar_only_changes
     - filter_semantic_similarity
   remove_duplicates: {}
   normalize_text:
@@ -26,19 +29,20 @@ preprocessing:
     trim: true
     remove_brackets: true
   filter_trivial_pairs:
-    min_edit_ratio: 0.18
-    min_len: 6
-    max_len: 50
+    min_edit_ratio: 0.05
+    min_len: 3
+    max_len: 128
   filter_by_length:
     max_tokens: 128
     tokenizer: "cointegrated/rut5-base"
-  filter_edit_distance:
-    min_edit_ratio: 0.1
-    max_edit_ratio: 0.9
+  filter_near_duplicates:
+    max_jaccard: 0.85
   filter_semantic_similarity:
-    threshold: 0.80
+    threshold: 0.75
     model: "sentence-transformers/LaBSE"
     batch_size: 32
+  filter_grammar_only_changes:
+    max_ratio: 0.0 
 
 model_name: "rut5_paraphraser"
 model_config:

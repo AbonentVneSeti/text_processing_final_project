@@ -6,7 +6,10 @@ from .filters import (
     filter_by_length,
     filter_edit_distance,
     filter_semantic_similarity,
-    filter_trivial_pairs
+    filter_trivial_pairs,
+    filter_near_duplicates,
+    filter_grammar_only_changes,
+    #filter_gender_swaps,
 )
 
 STEP_MAP = {
@@ -16,6 +19,9 @@ STEP_MAP = {
     "filter_by_length": filter_by_length,
     "filter_edit_distance": filter_edit_distance,
     "filter_semantic_similarity": filter_semantic_similarity,
+    "filter_near_duplicates": filter_near_duplicates,
+    "filter_grammar_only_changes": filter_grammar_only_changes,
+    #"filter_gender_swaps": filter_gender_swaps,
 }
 
 def prepare_dataset(df: pd.DataFrame, preproc_config: dict) -> pd.DataFrame:
