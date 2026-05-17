@@ -118,6 +118,7 @@ def load_or_create(config_section: dict) -> pd.DataFrame:
     all_originals = []
     all_paraphrases = []
     completed_batches = 0
+    processed_futures = set()
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
@@ -129,19 +130,45 @@ def load_or_create(config_section: dict) -> pd.DataFrame:
                                   rate_limiter)
             futures.append(fut)
 
-        for fut in tqdm(as_completed(futures), total=len(futures), desc="Back-translating"):
-            batch, trans_ru = fut.result()
-            if trans_ru is not None:
-                all_originals.extend(batch)
-                all_paraphrases.extend(trans_ru)
-            completed_batches += 1
+        try:
+            for fut in tqdm(as_completed(futures), total=len(futures), desc="Back-translating"):
+                processed_futures.add(fut)
+                batch, trans_ru = fut.result()
+                if trans_ru is not None:
+                    all_originals.extend(batch)
+                    all_paraphrases.extend(trans_ru)
+                completed_batches += 1
 
-            if completed_batches % checkpoint_every == 0 and all_originals:
-                new_df = pd.DataFrame({'original': all_originals[-checkpoint_every*batch_size:],
-                                       'paraphrase': all_paraphrases[-checkpoint_every*batch_size:]})
-                updated = pd.concat([existing, new_df], ignore_index=True)
-                updated.to_parquet(output_file, index=False)
-                existing = updated
+                if completed_batches % checkpoint_every == 0 and all_originals:
+                    new_df = pd.DataFrame({'original': all_originals[-checkpoint_every*batch_size:],
+                                           'paraphrase': all_paraphrases[-checkpoint_every*batch_size:]})
+                    updated = pd.concat([existing, new_df], ignore_index=True)
+                    updated.to_parquet(output_file, index=False)
+                    existing = updated
+        except KeyboardInterrupt:
+            print("\nПрерывание! Сохраняем незавершённые результаты...")
+
+            for fut in futures:
+                if fut.done() and fut not in processed_futures:
+                    try:
+                        batch, trans_ru = fut.result()
+                        if trans_ru is not None:
+                            all_originals.extend(batch)
+                            all_paraphrases.extend(trans_ru)
+                    except Exception:
+                        pass
+
+            if all_originals:
+                saved_batches = (len(all_originals) // (checkpoint_every * batch_size)) * checkpoint_every
+                if len(all_originals) > saved_batches * batch_size:
+                    start_idx = saved_batches * batch_size
+                    new_df = pd.DataFrame({'original': all_originals[start_idx:],
+                                           'paraphrase': all_paraphrases[start_idx:]})
+                    updated = pd.concat([existing, new_df], ignore_index=True)
+                    updated.to_parquet(output_file, index=False)
+                    existing = updated
+            print(f"Сохранено. Обработано {len(existing)} предложений.")
+            raise
 
     if all_originals:
         saved_batches = (len(all_originals) // (checkpoint_every * batch_size)) * checkpoint_every
@@ -154,99 +181,3 @@ def load_or_create(config_section: dict) -> pd.DataFrame:
             existing = updated
 
     return existing
-
-# import time
-# import queue
-# import threading
-# import pandas as pd
-# from concurrent.futures import ThreadPoolExecutor, as_completed
-# from deep_translator import GoogleTranslator
-# from tqdm.auto import tqdm
-
-
-# def _direct_translate(batch, from_lang, to_lang):
-#     translator = GoogleTranslator(source=from_lang, target=to_lang)
-#     trans = translator.translate_batch(batch)
-#     return (batch, trans)
-
-
-# def _back_translate(batch, trans_en, to_lang, from_lang):
-#     translator = GoogleTranslator(source=to_lang, target=from_lang)
-#     trans_ru = translator.translate_batch(trans_en)
-#     return (batch, trans_ru)
-
-
-# def load_or_create(config_section: dict) -> pd.DataFrame:
-#     from_lang = config_section.get("from_lang", "ru")
-#     to_lang = config_section.get("to_lang", "en")
-#     batch_size = config_section.get("batch_size", 100)
-#     interval = config_section.get("interval", 0.2)
-#     max_workers = config_section.get("max_workers", 10)
-
-#     if "sentences" in config_section:
-#         sentences = config_section["sentences"]
-#     else:
-#         with open(config_section["input_file"], 'r', encoding='utf-8') as f:
-#             sentences = [line.strip() for line in f if line.strip()]
-
-#     batches = [sentences[i:i+batch_size] for i in range(0, len(sentences), batch_size)]
-#     total_batches = len(batches)
-
-#     pending = queue.Queue()
-#     for batch in batches:
-#         pending.put((0, batch, None))
-
-#     result_pairs = []
-#     lock = threading.Lock()
-
-#     running = set()
-#     executor = ThreadPoolExecutor(max_workers=max_workers)
-
-#     last_send_time = 0.0
-#     progress = tqdm(total=total_batches * 2, desc="Back-translating", unit="req")
-
-#     while True:
-#         now = time.time()
-#         if now - last_send_time >= interval:
-#             try:
-#                 task_type, batch, data = pending.get_nowait()
-#             except queue.Empty:
-#                 if not running:
-#                     break
-#                 time.sleep(0.05)
-#                 continue
-
-#             if task_type == 0:
-#                 fut = executor.submit(_direct_translate, batch, from_lang, to_lang)
-#             else:
-#                 fut = executor.submit(_back_translate, batch, data, to_lang, from_lang)
-
-#             running.add(fut)
-#             last_send_time = time.time()
-
-#         done = {f for f in running if f.done()}
-#         for f in done:
-#             running.remove(f)
-#             try:
-#                 result = f.result()
-#             except Exception as e:
-#                 print(f"Ошибка выполнения запроса: {e}")
-#                 progress.update(1)
-#                 continue
-
-#             if isinstance(result, tuple) and len(result) == 2 and result[1] is not None:
-#                 batch, trans_en = result
-#                 pending.put((1, batch, trans_en))
-#             else:
-#                 batch, trans_ru = result
-#                 with lock:
-#                     result_pairs.extend(zip(batch, trans_ru))
-#             progress.update(1)
-
-#         time.sleep(0.01)
-
-#     executor.shutdown(wait=True)
-#     progress.close()
-
-#     originals, paraphrases = zip(*result_pairs) if result_pairs else ([], [])
-#     return pd.DataFrame({'original': list(originals), 'paraphrase': list(paraphrases)})

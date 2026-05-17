@@ -9,7 +9,7 @@ source_params:
     batch_size: 100
     max_workers: 2
     max_requests_per_second: 0.5
-    checkpoint_every: 100
+    checkpoint_every: 25
     output_file: "data/backtranslated.parquet"
   #custom_merge:
   #  files: ["data/ds1.csv", "data/ds2.csv"]
