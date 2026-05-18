@@ -2,11 +2,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 import os
-from .metrics import compute_metrics
 
 def train_model(model, train_loader, val_loader, config, trainer_config, metrics_config):
-    history = model.train(train_loader, val_loader, trainer_config)
- 
+    try:
+        history = model.train(train_loader, val_loader, trainer_config, metrics_config)
+    except KeyboardInterrupt:
+        print("\nОбучение прервано пользователем. Сохраняем модель...")
+        output_dir = trainer_config.get("output_dir", "./saves")
+        model.save(output_dir)
+        print(f"Модель сохранена в {output_dir}")
+        if hasattr(model, 'trainer') and hasattr(model.trainer, 'state'):
+            history = model.trainer.state.log_history
+        else:
+            history = []
+
+    output_dir = trainer_config.get("output_dir", "./saves")
+
     log_hist = [h for h in history if 'loss' in h and 'eval_loss' in h]
     if log_hist:
         steps = [h.get('step', i) for i, h in enumerate(log_hist)]
@@ -19,9 +30,12 @@ def train_model(model, train_loader, val_loader, config, trainer_config, metrics
         plt.ylabel('Loss')
         plt.legend()
         plt.title('Training History')
-        plt.savefig(os.path.join(trainer_config['output_dir'], 'loss_curve.png'))
+        plot_path = os.path.join(output_dir, 'loss_curve.png')
+        plt.savefig(plot_path)
+        print(f"График сохранён в {plot_path}")
 
-    with open(os.path.join(trainer_config['output_dir'], 'history.json'), 'w') as f:
+    history_path = os.path.join(output_dir, 'history.json')
+    with open(history_path, 'w') as f:
         json.dump(history, f)
-    print("Training completed. Model saved to", trainer_config['output_dir'])
+    print("История обучения сохранена в", history_path)
     return model

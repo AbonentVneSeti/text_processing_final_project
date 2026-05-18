@@ -19,7 +19,7 @@ class ParaphraserModel:
         self.tokenizer = AutoTokenizer.from_pretrained(self.pretrained)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(self.pretrained).to(self.device)
 
-    def train(self, train_loader, val_loader, trainer_config: dict = None):
+    def train(self, train_loader, val_loader, trainer_config: dict = None, metrics_config: dict = None):
         train_dataset = Dataset.from_pandas(train_loader.dataset)
         val_dataset = Dataset.from_pandas(val_loader.dataset)
 
@@ -37,8 +37,9 @@ class ParaphraserModel:
         val_dataset = val_dataset.map(tokenize_fn, batched=True)
 
         lr = float(self.config.get("learning_rate", 3e-4))
+        output_dir = trainer_config.get("output_dir", "./saves")
         args = Seq2SeqTrainingArguments(
-            output_dir=trainer_config.get("output_dir", "./saves"),
+            output_dir=output_dir,
             per_device_train_batch_size=trainer_config.get("batch_size", self.config.get("batch_size", 8)),
             per_device_eval_batch_size=trainer_config.get("batch_size", self.config.get("batch_size", 8)),
             learning_rate=lr,
@@ -53,9 +54,20 @@ class ParaphraserModel:
             predict_with_generate=True,
             fp16=bool(trainer_config.get("fp16", False)),
             report_to="none",
+            load_best_model_at_end=trainer_config.get("load_best_model_at_end", True),
+            metric_for_best_model=trainer_config.get("metric_for_best_model", "eval_loss"),
+            greater_is_better=trainer_config.get("greater_is_better", False),
         )
 
         data_collator = DataCollatorForSeq2Seq(self.tokenizer, model=self.model)
+
+        if metrics_config and "metrics" in metrics_config:
+            from ..metrics import compute_metrics_for_trainer
+            compute_metrics_fn = compute_metrics_for_trainer(
+                self.tokenizer, metrics_config["metrics"], metrics_config
+            )
+        else:
+            compute_metrics_fn = None
 
         trainer = Seq2SeqTrainer(
             model=self.model,
@@ -63,9 +75,18 @@ class ParaphraserModel:
             train_dataset=train_dataset,
             eval_dataset=val_dataset,
             data_collator=data_collator,
+            compute_metrics=compute_metrics_fn,
         )
 
-        trainer.train()
+        checkpoint = None
+        if trainer_config.get("resume_from_checkpoint", True):
+            if os.path.isdir(output_dir) and any(
+                f.startswith("checkpoint-") for f in os.listdir(output_dir)
+            ):
+                checkpoint = True
+                print("Найден чекпоинт, продолжаем обучение...")
+
+        trainer.train(resume_from_checkpoint=checkpoint)
         self.trainer = trainer
         return trainer.state.log_history
 

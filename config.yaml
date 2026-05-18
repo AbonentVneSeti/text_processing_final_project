@@ -57,6 +57,7 @@ model_config:
 
 trainer_config:
   output_dir: "models/rut5_paraphraser/saves"
+  batch_size: 16
   logging_strategy: "epoch"
   eval_strategy: "epoch"
   save_strategy: "epoch"
@@ -65,6 +66,7 @@ trainer_config:
   metric_for_best_model: "eval_loss"
   greater_is_better: false
   fp16: false
+  resume_from_checkpoint: true
 
 metrics_config:
   metrics: ["bleu", "bertscore", "cosine_similarity"]
