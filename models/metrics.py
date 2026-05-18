@@ -72,11 +72,19 @@ def compute_metrics_for_trainer(tokenizer, metrics_list, config):
     def compute_metrics(eval_preds):
         predictions = eval_preds.predictions
         labels = eval_preds.label_ids
-        decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+
+        if isinstance(predictions, tuple):
+            predictions = predictions[0]
+        predictions = np.array(predictions).astype(int)
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+        labels = labels.astype(int)
+
+        decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+
         decoded_preds = [pred.strip() for pred in decoded_preds]
         decoded_labels = [label.strip() for label in decoded_labels]
+
         results = {}
         for metric in metrics_list:
             if metric == "bleu":
