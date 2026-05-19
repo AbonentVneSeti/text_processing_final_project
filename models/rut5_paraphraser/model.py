@@ -48,7 +48,7 @@ class ParaphraserModel:
             weight_decay=float(self.config.get("weight_decay", 0.01)),
             gradient_accumulation_steps=int(self.config.get("gradient_accumulation_steps", 1)),
             logging_strategy=trainer_config.get("logging_strategy", "epoch"),
-            eval_strategy=trainer_config.get("eval_strategy", "epoch"),
+            evaluation_strategy=trainer_config.get("eval_strategy", "epoch"),
             save_strategy=trainer_config.get("save_strategy", "epoch"),
             save_total_limit=int(trainer_config.get("save_total_limit", 2)),
             predict_with_generate=True,
