@@ -75,8 +75,16 @@ def compute_metrics_for_trainer(tokenizer, metrics_list, config):
 
         if isinstance(predictions, tuple):
             predictions = predictions[0]
-        predictions = np.array(predictions).astype(int)
+
+        predictions = np.array(predictions)
+        labels = np.array(labels)
+
+        predictions = np.nan_to_num(predictions, nan=0, posinf=0, neginf=0)
+        predictions = np.clip(predictions, 0, tokenizer.vocab_size - 1)
+        predictions = predictions.astype(int)
+
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+        labels = np.nan_to_num(labels, nan=0, posinf=0, neginf=0)
         labels = labels.astype(int)
 
         decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
