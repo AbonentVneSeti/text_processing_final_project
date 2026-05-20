@@ -107,3 +107,18 @@ def compute_metrics_for_trainer(tokenizer, metrics_list, config):
                 results["cosine_similarity"] = cosine_similarity_embeddings(decoded_preds, decoded_labels, model, bs)
         return results
     return compute_metrics
+
+def compute_metrics(predictions, references, metrics_list, config):
+    results = {}
+    for metric in metrics_list:
+        if metric == "bleu":
+            results["bleu"] = bleu_score(predictions, references)
+        elif metric == "bertscore":
+            model = config.get("bertscore_model", "cointegrated/rubert-tiny2")
+            bs = config.get("batch_size", 16)
+            results["bertscore"] = custom_bertscore(predictions, references, model, bs)
+        elif metric == "cosine_similarity":
+            model = config.get("embedding_model", "sentence-transformers/LaBSE")
+            bs = config.get("batch_size", 16)
+            results["cosine_similarity"] = cosine_similarity_embeddings(predictions, references, model, bs)
+    return results

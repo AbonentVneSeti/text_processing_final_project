@@ -1,32 +1,27 @@
 import pandas as pd
 from tqdm import tqdm
-from .cleaners import normalize_text
 from .filters import (
     remove_duplicates,
-    filter_by_length,
-    filter_edit_distance,
-    filter_semantic_similarity,
     filter_trivial_pairs,
-    filter_near_duplicates,
-    filter_grammar_only_changes,
-    #filter_gender_swaps,
+    filter_length_ratio,
+    filter_by_length,
+    filter_semantic_similarity,
+    normalize_text,
+    filter_case_and_yo
 )
 
 STEP_MAP = {
     "remove_duplicates": remove_duplicates,
     "normalize_text": normalize_text,
     "filter_trivial_pairs": filter_trivial_pairs,
+    "filter_length_ratio": filter_length_ratio,
     "filter_by_length": filter_by_length,
-    "filter_edit_distance": filter_edit_distance,
     "filter_semantic_similarity": filter_semantic_similarity,
-    "filter_near_duplicates": filter_near_duplicates,
-    "filter_grammar_only_changes": filter_grammar_only_changes,
-    #"filter_gender_swaps": filter_gender_swaps,
+    "filter_case_and_yo": filter_case_and_yo
 }
 
 def prepare_dataset(df: pd.DataFrame, preproc_config: dict) -> pd.DataFrame:
     steps = preproc_config.get("steps", [])
-
     with tqdm(total=len(steps), desc="Preprocessing", unit="step") as pbar:
         for step_name in steps:
             if step_name in STEP_MAP:

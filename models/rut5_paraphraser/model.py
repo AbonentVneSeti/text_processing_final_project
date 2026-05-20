@@ -19,7 +19,7 @@ class ParaphraserModel:
         self.tokenizer = AutoTokenizer.from_pretrained(self.pretrained)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(self.pretrained).to(self.device)
 
-    def train(self, train_loader, val_loader, trainer_config: dict = None, metrics_config: dict = None):
+    def train(self, train_loader, val_loader, trainer_config=None, metrics_config=None):
         train_dataset = Dataset.from_pandas(train_loader.dataset)
         val_dataset = Dataset.from_pandas(val_loader.dataset)
 
@@ -33,8 +33,9 @@ class ParaphraserModel:
             model_inputs["labels"] = labels["input_ids"]
             return model_inputs
 
-        train_dataset = train_dataset.map(tokenize_fn, batched=True)
-        val_dataset = val_dataset.map(tokenize_fn, batched=True)
+        train_dataset = train_dataset.map(tokenize_fn, batched=True, remove_columns=["original", "paraphrase"])
+        val_dataset = val_dataset.map(tokenize_fn, batched=True, remove_columns=["original", "paraphrase"])
+
 
         lr = float(self.config.get("learning_rate", 3e-4))
         output_dir = trainer_config.get("output_dir", "./saves")
@@ -131,11 +132,12 @@ class ParaphraserModel:
             max_length=self.max_length,
             min_length=6,
             do_sample=True,
-            temperature=0.85,
-            top_p=0.9,
-            repetition_penalty=1.2,
+            temperature=0.9,
+            top_p=0.92,
+            top_k = 50,
+            repetition_penalty=1.5,
+            no_repeat_ngram_size = 3,
             num_return_sequences=num_return_sequences,
-            early_stopping=True
         )
         decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
         if num_return_sequences > 1:
