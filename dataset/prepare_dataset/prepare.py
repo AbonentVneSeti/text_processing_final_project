@@ -7,7 +7,8 @@ from .filters import (
     filter_by_length,
     filter_semantic_similarity,
     normalize_text,
-    filter_case_and_yo
+    filter_case_and_yo,
+    filter_paraphrase_score,
 )
 
 STEP_MAP = {
@@ -17,7 +18,8 @@ STEP_MAP = {
     "filter_length_ratio": filter_length_ratio,
     "filter_by_length": filter_by_length,
     "filter_semantic_similarity": filter_semantic_similarity,
-    "filter_case_and_yo": filter_case_and_yo
+    "filter_case_and_yo": filter_case_and_yo,
+    "filter_paraphrase_score": filter_paraphrase_score,
 }
 
 def prepare_dataset(df: pd.DataFrame, preproc_config: dict) -> pd.DataFrame:

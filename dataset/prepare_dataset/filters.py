@@ -2,9 +2,10 @@ import pandas as pd
 import numpy as np
 from rapidfuzz.distance import Levenshtein
 from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from tqdm import tqdm
 import re
+import torch
 
 def remove_duplicates(df: pd.DataFrame, params: dict = None) -> pd.DataFrame:
     df = df.drop_duplicates(subset=['original', 'paraphrase'])
@@ -93,4 +94,32 @@ def filter_case_and_yo(df: pd.DataFrame, params: dict | None = None) -> pd.DataF
     def normalize(s):
         return s.strip().lower().replace('ё', 'е')
     mask = df['original'].apply(normalize) != df['paraphrase'].apply(normalize)
+    return df[mask].reset_index(drop=True)
+
+def filter_paraphrase_score(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    model_name = params.get("model", "inkoziev/ruparaphrase_quality")
+    threshold = params.get("threshold", 0.5)
+    batch_size = params.get("batch_size", 32)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
+    model.eval()
+
+    texts1 = df['original'].tolist()
+    texts2 = df['paraphrase'].tolist()
+    scores = []
+
+    with torch.no_grad():
+        for i in range(0, len(texts1), batch_size):
+            batch1 = texts1[i:i+batch_size]
+            batch2 = texts2[i:i+batch_size]
+            inputs = tokenizer(batch1, batch2, return_tensors='pt',
+                               padding=True, truncation=True, max_length=128)
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+            outputs = model(**inputs)
+            probs = torch.softmax(outputs.logits, dim=-1)[:, 1]
+            scores.extend(probs.cpu().numpy())
+
+    mask = np.array(scores) >= threshold
     return df[mask].reset_index(drop=True)

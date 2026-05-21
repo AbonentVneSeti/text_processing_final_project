@@ -129,15 +129,10 @@ class ParaphraserModel:
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         outputs = self.model.generate(
             **inputs,
-            max_length=self.max_length,
-            min_length=6,
-            do_sample=True,
-            temperature=0.9,
-            top_p=0.92,
-            top_k = 50,
-            repetition_penalty=1.5,
-            no_repeat_ngram_size = 3,
-            num_return_sequences=num_return_sequences,
+            # max_length=self.max_length,
+            # num_beams=1,
+            # do_sample=False,
+            # early_stopping=False
         )
         decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
         if num_return_sequences > 1:
