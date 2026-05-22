@@ -24,8 +24,9 @@ class ParaphraserModel:
         val_dataset = Dataset.from_pandas(val_loader.dataset)
 
         def tokenize_fn(examples):
+            inputs = ["перефразируй: " + text for text in examples["original"]]
             model_inputs = self.tokenizer(
-                examples["original"], max_length=self.max_length, truncation=True, padding=True
+                inputs, max_length=self.max_length, truncation=True, padding=True
             )
             labels = self.tokenizer(
                 examples["paraphrase"], max_length=self.max_length, truncation=True, padding=True
@@ -93,15 +94,18 @@ class ParaphraserModel:
 
     def evaluate(self, test_loader, metrics_config=None):
         test_dataset = Dataset.from_pandas(test_loader.dataset)
+        
         def tokenize_fn(examples):
+            inputs = ["перефразируй: " + text for text in examples["original"]]
             model_inputs = self.tokenizer(
-                examples["original"], max_length=self.max_length, truncation=True, padding=True
+                inputs, max_length=self.max_length, truncation=True, padding=True
             )
             labels = self.tokenizer(
                 examples["paraphrase"], max_length=self.max_length, truncation=True, padding=True
             )
             model_inputs["labels"] = labels["input_ids"]
             return model_inputs
+        
         test_dataset = test_dataset.map(tokenize_fn, batched=True)
         data_collator = DataCollatorForSeq2Seq(self.tokenizer, model=self.model)
 
@@ -125,16 +129,27 @@ class ParaphraserModel:
         return metrics
 
     def generate(self, texts: List[str], num_return_sequences=1) -> List[str]:
-        inputs = self.tokenizer(texts, max_length=self.max_length, truncation=True, padding=True, return_tensors="pt")
+        inputs_with_prefix = ["перефразируй: " + t for t in texts]
+        inputs = self.tokenizer(
+            inputs_with_prefix,
+            max_length=self.max_length, truncation=True, padding=True, return_tensors="pt"
+        )
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=self.max_length,
-            num_beams=4,
+            max_length=self.max_length,
             no_repeat_ngram_size=3,
-            repetition_penalty=2.0,
-            early_stopping=True,
+            repetition_penalty=1.3,
         )
+        # outputs = self.model.generate(
+        #     **inputs,
+        #     max_length=self.max_length,
+        #     num_beams=5,                      # лучевой поиск улучшает грамматику
+        #     no_repeat_ngram_size=3,           # без повторений внутри парафраза
+        #     encoder_no_repeat_ngram_size=2,   # мягкий запрет биграмм оригинала (не триграмм)
+        #     repetition_penalty=1.2,           # лёгкий штраф за повторы
+        #     early_stopping=True,
+        # )
         decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
         if num_return_sequences > 1:
             return [decoded[i:i+num_return_sequences] for i in range(0, len(decoded), num_return_sequences)]

@@ -93,6 +93,12 @@ def compute_metrics_for_trainer(tokenizer, metrics_list, config):
         decoded_preds = [pred.strip() for pred in decoded_preds]
         decoded_labels = [label.strip() for label in decoded_labels]
 
+        max_samples = config.get("max_samples_for_metrics", 1000)
+        if len(decoded_preds) > max_samples:
+            indices = np.random.choice(len(decoded_preds), size=max_samples, replace=False)
+            decoded_preds = [decoded_preds[i] for i in indices]
+            decoded_labels = [decoded_labels[i] for i in indices]
+
         results = {}
         for metric in metrics_list:
             if metric == "bleu":

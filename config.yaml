@@ -16,15 +16,15 @@ source_params:
 
 preprocessing:
   steps:
-    - normalize_text
-    - remove_duplicates
-    - filter_case_and_yo
-    - filter_trivial_pairs
-    - filter_length_ratio
+    # - normalize_text
+    # - remove_duplicates
+    # - filter_case_and_yo
+    # - filter_trivial_pairs
+    # - filter_length_ratio
     - filter_by_length
-    - filter_grammar_only_changes
-    - filter_paraphrase_score
-    - filter_semantic_similarity
+    # - filter_grammar_only_changes
+    # - filter_paraphrase_score
+    # - filter_semantic_similarity
   normalize_text:
     trim: true
     remove_brackets: true
@@ -39,7 +39,7 @@ preprocessing:
     min_ratio: 0.6
     max_ratio: 1.7
   filter_by_length:
-    max_tokens: 128
+    max_tokens: 80
     min_tokens: 5
     tokenizer: "cointegrated/rut5-base"
   filter_grammar_only_changes:
@@ -57,9 +57,9 @@ preprocessing:
 model_name: "rut5_paraphraser"
 model_config:
   pretrained_name: "cointegrated/rut5-base"
-  max_length: 128
+  max_length: 80
   batch_size: 12
-  learning_rate: 1e-4
+  learning_rate: 2e-4
   num_epochs: 5
   warmup_steps: 200
   weight_decay: 0.01
@@ -82,4 +82,5 @@ metrics_config:
   metrics: ["bleu", "bertscore", "cosine_similarity"]
   bertscore_model: "cointegrated/rubert-tiny2"
   embedding_model: "sentence-transformers/LaBSE"
-  batch_size: 8
+  batch_size: 16
+  max_samples_for_metrics: 1000
