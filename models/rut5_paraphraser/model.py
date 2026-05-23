@@ -59,6 +59,8 @@ class ParaphraserModel:
             load_best_model_at_end=trainer_config.get("load_best_model_at_end", True),
             metric_for_best_model=trainer_config.get("metric_for_best_model", "eval_loss"),
             greater_is_better=trainer_config.get("greater_is_better", False),
+            dataloader_num_workers=trainer_config.get("dataloader_num_workers", 0),
+            dataloader_pin_memory=trainer_config.get("pin_memory", False),
         )
 
         data_collator = DataCollatorForSeq2Seq(self.tokenizer, model=self.model)
@@ -138,16 +140,27 @@ class ParaphraserModel:
         outputs = self.model.generate(
             **inputs,
             max_length=self.max_length,
+            do_sample=False,
+            num_beams = 4,
             no_repeat_ngram_size=3,
-            repetition_penalty=1.3,
+            repetition_penalty=1.5,
+            early_stopping=True,
         )
+        
         # outputs = self.model.generate(
         #     **inputs,
         #     max_length=self.max_length,
-        #     num_beams=5,                      # лучевой поиск улучшает грамматику
-        #     no_repeat_ngram_size=3,           # без повторений внутри парафраза
-        #     encoder_no_repeat_ngram_size=2,   # мягкий запрет биграмм оригинала (не триграмм)
-        #     repetition_penalty=1.2,           # лёгкий штраф за повторы
+        #     no_repeat_ngram_size=3,
+        #     repetition_penalty=1.3,
+        #     num_beams = 1,
+        # )
+        # outputs = self.model.generate(
+        #     **inputs,
+        #     max_length=self.max_length,
+        #     num_beams=5,
+        #     no_repeat_ngram_size=3,
+        #     encoder_no_repeat_ngram_size=2,
+        #     repetition_penalty=1.2,
         #     early_stopping=True,
         # )
         decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)

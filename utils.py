@@ -24,7 +24,9 @@ def build_dataloaders(df: pd.DataFrame, model_config: dict, split_ratios=(0.9, 0
 
     train_df = df.iloc[:train_end]
     val_df = df.iloc[train_end:]
-
+    
+    val_df = val_df.sample(n=min(5000, len(val_df)), random_state=42) #todo убрать потом
+    
     batch_size = model_config.get("batch_size", 8)
 
     class Wrapper:

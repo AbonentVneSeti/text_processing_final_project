@@ -77,6 +77,8 @@ trainer_config:
   greater_is_better: false
   fp16: false
   resume_from_checkpoint: true
+  dataloader_num_workers: 4
+  pin_memory: true
 
 metrics_config:
   metrics: ["bleu", "bertscore", "cosine_similarity"]
