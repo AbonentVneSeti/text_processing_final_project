@@ -54,54 +54,53 @@ preprocessing:
     model: "sentence-transformers/LaBSE"
     batch_size: 64
 
-model_name: "simple_seq2seq"
-
-model_config:
-  vocab_size: 45000
-  embed_dim: 128
-  hidden_size: 256
-  num_layers: 2
-  dropout: 0.3
-  max_length: 80
-  batch_size: 48
-  learning_rate: 1e-3
-  num_epochs: 5
-
-trainer_config:
-  output_dir: "models/simple_seq2seq/saves"
-  batch_size: 48
-  save_strategy: "epoch"
-  save_total_limit: 3
-  load_best_model_at_end: true
-  metric_for_best_model: "eval_loss"
-  greater_is_better: false
-  resume_from_checkpoint: true
-  
-# model_name: "rut5_paraphraser"
+# model_name: "simple_seq2seq"
 # model_config:
-#   pretrained_name: "cointegrated/rut5-base"
+#   vocab_size: 45000
+#   embed_dim: 128
+#   hidden_size: 256
+#   num_layers: 2
+#   dropout: 0.3
 #   max_length: 80
-#   batch_size: 12
-#   learning_rate: 2e-4
+#   batch_size: 48
+#   learning_rate: 1e-3
 #   num_epochs: 5
-#   warmup_steps: 200
-#   weight_decay: 0.01
-#   gradient_accumulation_steps: 1
 
 # trainer_config:
-#   output_dir: "models/rut5_paraphraser/saves"
-#   batch_size: 12
-#   logging_strategy: "epoch"
-#   eval_strategy: "epoch"
+#   output_dir: "models/simple_seq2seq/saves"
+#   batch_size: 48
 #   save_strategy: "epoch"
 #   save_total_limit: 3
 #   load_best_model_at_end: true
 #   metric_for_best_model: "eval_loss"
 #   greater_is_better: false
-#   fp16: false
 #   resume_from_checkpoint: true
-#   dataloader_num_workers: 4
-#   pin_memory: true
+  
+model_name: "rut5_paraphraser"
+model_config:
+  pretrained_name: "cointegrated/rut5-base"
+  max_length: 80
+  batch_size: 12
+  learning_rate: 2e-4
+  num_epochs: 5
+  warmup_steps: 200
+  weight_decay: 0.01
+  gradient_accumulation_steps: 1
+
+trainer_config:
+  output_dir: "models/rut5_paraphraser/saves"
+  batch_size: 12
+  logging_strategy: "epoch"
+  eval_strategy: "epoch"
+  save_strategy: "epoch"
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  fp16: false
+  resume_from_checkpoint: true
+  dataloader_num_workers: 4
+  pin_memory: true
 
 metrics_config:
   metrics: ["bleu", "bertscore", "cosine_similarity"]
