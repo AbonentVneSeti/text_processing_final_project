@@ -2,8 +2,9 @@ import os
 import re
 import json
 import pickle
+import random
 from collections import Counter
-from typing import List
+from typing import List, Optional, Dict, Any
 
 import torch
 import torch.nn as nn
@@ -139,11 +140,11 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward_step(self, tgt_token, hidden, enc_outputs, src_mask):
-        emb = self.dropout(self.embedding(tgt_token))    # (B, 1, E)
+        emb = self.dropout(self.embedding(tgt_token))
         context, _ = self.attention(hidden[-1], enc_outputs, src_mask)
-        rnn_input = torch.cat([emb, context.unsqueeze(1)], dim=-1)  # (B, 1, E+H)
+        rnn_input = torch.cat([emb, context.unsqueeze(1)], dim=-1)
         output, hidden = self.rnn(rnn_input, hidden)
-        logits = self.out(torch.cat([output.squeeze(1), context], dim=-1))  # (B, V)
+        logits = self.out(torch.cat([output.squeeze(1), context], dim=-1))
         return logits, hidden
 
 
@@ -187,8 +188,9 @@ class ParaphraserModel:
         self.device      = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         self.tokenizer = WordTokenizer(self.vocab_size)
-        self.model: Seq2SeqModel | None = None
-
+        self.model: Optional[Seq2SeqModel] = None
+        self.optimizer = None
+        self.scheduler = None
 
     def _build_model(self):
         vocab_size = len(self.tokenizer.word2idx)
@@ -223,7 +225,87 @@ class ParaphraserModel:
         )
         return src_tensor, src_lens, tgt_tensor
 
-    def train(self, train_loader, val_loader, trainer_config: dict = None, metrics_config: dict = None):
+    def _save_checkpoint(self, checkpoint_dir: str, epoch: int,
+                         best_val_loss: float, history: List[Dict[str, Any]]):
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        self.tokenizer.save(checkpoint_dir)
+        torch.save(self.model.state_dict(), os.path.join(checkpoint_dir, "model_state.pt"))
+        torch.save(self.optimizer.state_dict(), os.path.join(checkpoint_dir, "optimizer_state.pt"))
+        torch.save(self.scheduler.state_dict(), os.path.join(checkpoint_dir, "scheduler_state.pt"))
+
+        training_state = {
+            "epoch": epoch,
+            "best_val_loss": best_val_loss,
+            "history": history
+        }
+        with open(os.path.join(checkpoint_dir, "training_state.json"), "w") as f:
+            json.dump(training_state, f)
+
+        torch.save(torch.get_rng_state(), os.path.join(checkpoint_dir, "rng_state_torch.pt"))
+        # numpy random state saved via pickle due to inhomogeneous structure
+        with open(os.path.join(checkpoint_dir, "rng_state_numpy.pkl"), "wb") as f:
+            pickle.dump(np.random.get_state(), f)
+        with open(os.path.join(checkpoint_dir, "rng_state_random.pkl"), "wb") as f:
+            pickle.dump(random.getstate(), f)
+
+        arch = {
+            "vocab_size": self.vocab_size,
+            "embed_dim": self.embed_dim,
+            "hidden_size": self.hidden_size,
+            "num_layers": self.num_layers,
+            "dropout": self.dropout,
+            "max_length": self.max_length,
+        }
+        with open(os.path.join(checkpoint_dir, "config.json"), "w") as f:
+            json.dump(arch, f)
+
+    def _load_checkpoint(self, checkpoint_dir: str):
+        self.tokenizer.load(checkpoint_dir)
+        self._build_model()
+        self.model.load_state_dict(
+            torch.load(os.path.join(checkpoint_dir, "model_state.pt"), map_location=self.device)
+        )
+        self.optimizer.load_state_dict(
+            torch.load(os.path.join(checkpoint_dir, "optimizer_state.pt"), map_location=self.device)
+        )
+        self.scheduler.load_state_dict(
+            torch.load(os.path.join(checkpoint_dir, "scheduler_state.pt"), map_location=self.device)
+        )
+
+        with open(os.path.join(checkpoint_dir, "training_state.json")) as f:
+            training_state = json.load(f)
+        torch.set_rng_state(torch.load(os.path.join(checkpoint_dir, "rng_state_torch.pt")))
+        with open(os.path.join(checkpoint_dir, "rng_state_numpy.pkl"), "rb") as f:
+            np.random.set_state(pickle.load(f))
+        with open(os.path.join(checkpoint_dir, "rng_state_random.pkl"), "rb") as f:
+            random.setstate(pickle.load(f))
+
+        return training_state
+
+    def _find_latest_checkpoint(self, output_dir: str) -> Optional[str]:
+        if not os.path.isdir(output_dir):
+            return None
+        checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+        if not checkpoints:
+            return None
+        latest = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))[-1]
+        return os.path.join(output_dir, latest)
+
+    def _cleanup_checkpoints(self, output_dir: str, save_total_limit: int):
+        if save_total_limit <= 0:
+            return
+        checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+        if len(checkpoints) <= save_total_limit:
+            return
+        sorted_checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+        for ckpt in sorted_checkpoints[:-save_total_limit]:
+            full_path = os.path.join(output_dir, ckpt)
+            if os.path.isdir(full_path):
+                for f in os.listdir(full_path):
+                    os.remove(os.path.join(full_path, f))
+                os.rmdir(full_path)
+
+    def train(self, train_loader, val_loader, trainer_config=None, metrics_config=None):
         trainer_config = trainer_config or {}
         lr          = float(self.config.get("learning_rate", 1e-3))
         num_epochs  = int(self.config.get("num_epochs", 3))
@@ -231,28 +313,40 @@ class ParaphraserModel:
         output_dir  = trainer_config.get("output_dir", "./saves")
         os.makedirs(output_dir, exist_ok=True)
 
-        print("Строим словарь из обучающей выборки...")
-        all_sents: List[str] = []
-        for batch_df in tqdm(train_loader, desc="Чтение датасета"):
-            all_sents.extend(batch_df["original"].tolist())
-            all_sents.extend(batch_df["paraphrase"].tolist())
-        self.tokenizer.build_vocab(all_sents)
-        print(f"Словарь: {len(self.tokenizer.word2idx):,} токенов")
+        save_strategy = trainer_config.get("save_strategy", "epoch")
+        save_total_limit = int(trainer_config.get("save_total_limit", 3))
+        resume_from_checkpoint = trainer_config.get("resume_from_checkpoint", True)
+        load_best_model_at_end = trainer_config.get("load_best_model_at_end", False)
+        metric_for_best_model = trainer_config.get("metric_for_best_model", "eval_loss")
+        greater_is_better = trainer_config.get("greater_is_better", False)
 
-        self._build_model()
-        n_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        print(f"Параметров модели: {n_params:,}")
-
-        optimizer  = Adam(self.model.parameters(), lr=lr)
-        scheduler  = ReduceLROnPlateau(optimizer, patience=1, factor=0.5, verbose=True)
-        criterion  = nn.CrossEntropyLoss(ignore_index=self.tokenizer.pad_idx())
-
+        start_epoch = 1
+        best_val_loss = float("inf")
         history = []
 
-        for epoch in range(1, num_epochs + 1):
+        ckpt_dir = self._find_latest_checkpoint(output_dir) if resume_from_checkpoint else None
+        if ckpt_dir is not None:
+            training_state = self._load_checkpoint(ckpt_dir)
+            start_epoch = training_state["epoch"] + 1
+            best_val_loss = training_state["best_val_loss"]
+            history = training_state["history"]
+            self.optimizer.param_groups[0]['lr'] = lr
+            print(f"Resumed from checkpoint {ckpt_dir}, epoch {start_epoch}")
+        else:
+            all_sents: List[str] = []
+            for batch_df in tqdm(train_loader, desc="Reading dataset"):
+                all_sents.extend(batch_df["original"].tolist())
+                all_sents.extend(batch_df["paraphrase"].tolist())
+            self.tokenizer.build_vocab(all_sents)
+            self._build_model()
+            self.optimizer = Adam(self.model.parameters(), lr=lr)
+            self.scheduler = ReduceLROnPlateau(self.optimizer, patience=1, factor=0.5, verbose=True)
+
+        criterion = nn.CrossEntropyLoss(ignore_index=self.tokenizer.pad_idx())
+
+        for epoch in range(start_epoch, num_epochs + 1):
             self.model.train()
             total_loss, steps = 0.0, 0
-
             tf_ratio = max(0.3, 1.0 - (epoch - 1) * 0.2)
 
             batches = list(train_loader)
@@ -260,15 +354,13 @@ class ParaphraserModel:
             for batch_df in pbar:
                 orig_batch = batch_df["original"].tolist()
                 para_batch = batch_df["paraphrase"].tolist()
-
                 for i in range(0, len(orig_batch), batch_size):
                     src_b = orig_batch[i:i+batch_size]
                     tgt_b = para_batch[i:i+batch_size]
                     if not src_b:
                         continue
-
                     src, src_lens, tgt = self._collate(src_b, tgt_b)
-                    optimizer.zero_grad()
+                    self.optimizer.zero_grad()
                     logits = self.model(src, src_lens, tgt, tf_ratio)
                     loss = criterion(
                         logits[:, 1:].reshape(-1, logits.size(-1)),
@@ -276,10 +368,9 @@ class ParaphraserModel:
                     )
                     loss.backward()
                     nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                    optimizer.step()
-
+                    self.optimizer.step()
                     total_loss += loss.item()
-                    steps      += 1
+                    steps += 1
                     pbar.set_postfix({"loss": f"{total_loss/steps:.4f}", "tf": f"{tf_ratio:.2f}"})
 
             avg_train = total_loss / max(steps, 1)
@@ -301,25 +392,78 @@ class ParaphraserModel:
                             logits[:, 1:].reshape(-1, logits.size(-1)),
                             tgt[:, 1:].reshape(-1)
                         )
-                        val_loss  += loss.item()
+                        val_loss += loss.item()
                         val_steps += 1
 
             avg_val = val_loss / max(val_steps, 1)
-            scheduler.step(avg_val)
+            self.scheduler.step(avg_val)
 
             record = {"epoch": epoch, "loss": avg_train, "eval_loss": avg_val}
+
+            if metrics_config and metrics_config.get("metrics"):
+                from ..metrics import compute_metrics
+                val_df = val_loader.dataset
+                sample_size = min(500, len(val_df))
+                val_sample = val_df.sample(n=sample_size, random_state=42)
+                originals = val_sample["original"].tolist()
+                references = val_sample["paraphrase"].tolist()
+                predictions = []
+                for orig in originals:
+                    pred = self.generate([orig])[0]
+                    predictions.append(pred)
+                mets = compute_metrics(predictions, references, metrics_config['metrics'], metrics_config)
+                for k, v in mets.items():
+                    record[f"val_{k}"] = float(v)
+                print(f"Metrics: { {k: f'{v:.4f}' for k, v in mets.items()} }")
+
             history.append(record)
             print(f"Epoch {epoch}: train_loss={avg_train:.4f}  val_loss={avg_val:.4f}")
-            self.save(output_dir)
+
+            if save_strategy == "epoch":
+                checkpoint_dir = os.path.join(output_dir, f"checkpoint-{epoch}")
+                self._save_checkpoint(checkpoint_dir, epoch, best_val_loss, history)
+                self._cleanup_checkpoints(output_dir, save_total_limit)
+
+            if avg_val < best_val_loss:
+                best_val_loss = avg_val
+
+        if load_best_model_at_end:
+            best_ckpt = None
+            best_value = float("inf") if not greater_is_better else -float("inf")
+            for d in os.listdir(output_dir):
+                if d.startswith("checkpoint-"):
+                    with open(os.path.join(output_dir, d, "training_state.json")) as f:
+                        state = json.load(f)
+                    for entry in state["history"]:
+                        if entry.get("epoch") == int(d.split("-")[1]):
+                            val_metric = entry.get(metric_for_best_model)
+                            if val_metric is not None:
+                                if (greater_is_better and val_metric > best_value) or \
+                                   (not greater_is_better and val_metric < best_value):
+                                    best_value = val_metric
+                                    best_ckpt = os.path.join(output_dir, d)
+            if best_ckpt is not None:
+                self._load_checkpoint(best_ckpt)
+                self.save(output_dir)
+                print(f"Loaded best model from {best_ckpt}")
 
         with open(os.path.join(output_dir, "history.json"), "w") as f:
-            json.dump(history, f)
-        print("История сохранена в", os.path.join(output_dir, "history.json"))
+            serializable = []
+            for rec in history:
+                clean_rec = {}
+                for k, v in rec.items():
+                    if isinstance(v, (np.floating, np.integer)):
+                        clean_rec[k] = float(v)
+                    else:
+                        clean_rec[k] = v
+                serializable.append(clean_rec)
+            json.dump(serializable, f)
+
         return history
 
     def generate(self, texts: List[str], num_return_sequences: int = 1) -> List[str]:
         if self.model is None:
-            raise RuntimeError("Модель не загружена. Вызовите train() или load().")
+            raise RuntimeError("Model not loaded.")
         self.model.eval()
 
         results = []
@@ -385,4 +529,3 @@ class ParaphraserModel:
         state = torch.load(os.path.join(path, "model.pt"), map_location=self.device)
         self.model.load_state_dict(state)
         self.model.eval()
-        print(f"Базовая модель загружена из {path}")
