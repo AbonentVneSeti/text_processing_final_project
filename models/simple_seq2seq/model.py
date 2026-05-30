@@ -242,7 +242,6 @@ class ParaphraserModel:
             json.dump(training_state, f)
 
         torch.save(torch.get_rng_state(), os.path.join(checkpoint_dir, "rng_state_torch.pt"))
-        # numpy random state saved via pickle due to inhomogeneous structure
         with open(os.path.join(checkpoint_dir, "rng_state_numpy.pkl"), "wb") as f:
             pickle.dump(np.random.get_state(), f)
         with open(os.path.join(checkpoint_dir, "rng_state_random.pkl"), "wb") as f:

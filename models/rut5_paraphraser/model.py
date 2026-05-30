@@ -154,15 +154,6 @@ class ParaphraserModel:
         #     repetition_penalty=1.3,
         #     num_beams = 1,
         # )
-        # outputs = self.model.generate(
-        #     **inputs,
-        #     max_length=self.max_length,
-        #     num_beams=5,
-        #     no_repeat_ngram_size=3,
-        #     encoder_no_repeat_ngram_size=2,
-        #     repetition_penalty=1.2,
-        #     early_stopping=True,
-        # )
         decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
         if num_return_sequences > 1:
             return [decoded[i:i+num_return_sequences] for i in range(0, len(decoded), num_return_sequences)]
